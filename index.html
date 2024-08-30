@@ -30,6 +30,12 @@
             font-size: 24px;
             font-weight: bold;
             color: #ff0000;
+            display: flex;
+            align-items: center;
+        }
+        .logo i {
+            margin-right: 8px;
+            color: #ff0000;
         }
         .search-bar {
             display: flex;
@@ -115,8 +121,20 @@
             cursor: pointer;
             font-size: 24px;
             color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .like-button, .subscribe-button {
+        .player button:hover {
+            background: #d40000;
+        }
+        .player .actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        .action-button {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -126,25 +144,38 @@
             color: white;
             font-size: 16px;
             padding: 10px;
-            margin: 10px 0;
             cursor: pointer;
             transition: transform 0.3s ease;
         }
-        .like-button:hover, .subscribe-button:hover {
+        .action-button i {
+            margin-right: 8px;
+        }
+        .action-button:hover {
             transform: scale(1.1);
         }
-        .like-button i, .subscribe-button i {
-            margin-right: 8px;
+        .like-button {
+            background-color: #d40000;
+        }
+        .subscribe-button {
+            background-color: #ff0000;
+        }
+        .like-button.liked i, .like-button.liked {
+            color: #d40000;
+        }
+        .subscribe-button i {
+            color: #fff;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header id="homeButton">
-            <div class="logo">YTLooted</div>
+            <div class="logo">
+                <i class="fa-solid fa-otter"></i> YTLooted
+            </div>
             <div class="search-bar">
                 <input type="text" id="searchQuery" placeholder="Search for videos...">
-                <button id="searchButton">Search</button>
+                <button id="searchButton"><i class="fa-solid fa-magnifying-glass"></i></button>
             </div>
         </header>
         <h2 id="pageTitle">Trending Videos</h2>
@@ -153,22 +184,29 @@
     </div>
 
     <div id="player" class="player">
-        <button id="closePlayer">&times;</button>
+        <button id="closePlayer"><i class="fa-regular fa-x"></i></button>
         <iframe id="playerIframe" src="" frameborder="0" allowfullscreen></iframe>
-        <button class="like-button" id="likeButton"><i class="fas fa-thumbs-up"></i> Like (<span id="likeCount">0</span>)</button>
-        <button class="subscribe-button" id="subscribeButton"><i class="fas fa-user-plus"></i> Follow (<span id="subscriberCount">0</span>)</button>
+        <div class="actions">
+            <button class="action-button like-button" id="likeButton">
+                <i class="fa-regular fa-heart"></i> Like (<span id="likeCount">0</span>)
+            </button>
+            <button class="action-button subscribe-button" id="subscribeButton">
+                <i class="fa-solid fa-user-plus"></i> Follow (<span id="subscriberCount">0</span>)
+            </button>
+        </div>
     </div>
 
     <script>
         const API_KEY = 'AIzaSyBxzUIKZNKvSFp_fVQCKDMbc8rLGYMqEbI';
         const TRENDING_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=US&key=' + API_KEY;
         const SEARCH_API_URL = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=' + API_KEY;
-        const VIDEO_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=statistics&id='; 
+        const VIDEO_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=statistics&id=';
         const CHANNEL_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/channels?part=statistics&id=';
 
         let nextPageToken = '';
         let isLoading = false;
         let currentVideoId = null;
+        let likedVideos = new Set();
 
         async function fetchTrendingVideos(pageToken = '') {
             if (isLoading) return;
@@ -258,7 +296,7 @@
                 }
                 const videoData = await videoResponse.json();
                 const likeCount = videoData.items[0].statistics.likeCount || 0;
-                
+
                 const channelId = videoData.items[0].snippet.channelId;
                 const channelResponse = await fetch(`${CHANNEL_STATS_API_URL}${channelId}&key=${API_KEY}`);
                 if (!channelResponse.ok) {
@@ -269,24 +307,42 @@
 
                 document.getElementById('likeCount').innerText = likeCount;
                 document.getElementById('subscriberCount').innerText = subscriberCount;
+
+                const likeButton = document.getElementById('likeButton');
+                likeButton.classList.toggle('liked', likedVideos.has(videoId));
             } catch (error) {
                 console.error('Error updating counts:', error);
             }
         }
 
-        async function updateLikeCount() {
+        function handleLikeButton() {
             if (currentVideoId) {
-                const likeCount = parseInt(document.getElementById('likeCount').innerText, 10) + 1;
-                document.getElementById('likeCount').innerText = likeCount;
-                // Optionally, send this updated count to your backend or store it locally
+                const likeButton = document.getElementById('likeButton');
+                const liked = likeButton.classList.contains('liked');
+                const likeCountElement = document.getElementById('likeCount');
+                let likeCount = parseInt(likeCountElement.innerText, 10);
+
+                likeCountElement.innerText = liked ? likeCount - 1 : likeCount + 1;
+                likeButton.classList.toggle('liked', !liked);
+
+                if (liked) {
+                    likedVideos.delete(currentVideoId);
+                } else {
+                    likedVideos.add(currentVideoId);
+                }
+                likeButton.classList.add('animate');
+                setTimeout(() => likeButton.classList.remove('animate'), 300);
             }
         }
 
-        async function updateSubscriberCount() {
+        function handleSubscribeButton() {
             if (currentVideoId) {
-                const subscriberCount = parseInt(document.getElementById('subscriberCount').innerText, 10) + 1;
-                document.getElementById('subscriberCount').innerText = subscriberCount;
+                const subscribeCountElement = document.getElementById('subscriberCount');
+                const subscriberCount = parseInt(subscribeCountElement.innerText, 10) + 1;
+                subscribeCountElement.innerText = subscriberCount;
                 // Optionally, send this updated count to your backend or store it locally
+                document.getElementById('subscribeButton').classList.add('animate');
+                setTimeout(() => document.getElementById('subscribeButton').classList.remove('animate'), 300);
             }
         }
 
@@ -316,8 +372,8 @@
             }
         });
 
-        document.getElementById('likeButton').addEventListener('click', updateLikeCount);
-        document.getElementById('subscribeButton').addEventListener('click', updateSubscriberCount);
+        document.getElementById('likeButton').addEventListener('click', handleLikeButton);
+        document.getElementById('subscribeButton').addEventListener('click', handleSubscribeButton);
 
         document.getElementById('homeButton').addEventListener('click', () => {
             document.getElementById('pageTitle').innerText = 'Trending Videos';
