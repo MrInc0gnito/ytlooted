@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTLooted - Trending YouTube Videos</title>
+    <script src="https://kit.fontawesome.com/3412ef2576.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #181818;
+            color: #fff;
+        }
+        .container {
+            width: 90%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff0000;
+        }
+        .search-bar {
+            display: flex;
+            align-items: center;
+        }
+        .search-bar input {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            outline: none;
+            width: 250px;
+        }
+        .search-bar button {
+            margin-left: 10px;
+            padding: 8px 12px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .video {
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #333;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .video:hover {
+            transform: scale(1.05);
+        }
+        .video img {
+            width: 100%;
+            height: 112px; /* Fixed height for thumbnails */
+            object-fit: cover;
+        }
+        .video-title {
+            padding: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            margin: 0;
+        }
+        .error-message {
+            color: #ff0000;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .player {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .player iframe {
+            width: 80%;
+            height: 80%;
+            border: none;
+            border-radius: 8px;
+        }
+        .player button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ff0000;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 24px;
+            color: #fff;
+        }
+        .like-button, .subscribe-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ff0000;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 16px;
+            padding: 10px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .like-button:hover, .subscribe-button:hover {
+            transform: scale(1.1);
+        }
+        .like-button i, .subscribe-button i {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header id="homeButton">
+            <div class="logo">YTLooted</div>
+            <div class="search-bar">
+                <input type="text" id="searchQuery" placeholder="Search for videos...">
+                <button id="searchButton">Search</button>
+            </div>
+        </header>
+        <h2 id="pageTitle">Trending Videos</h2>
+        <div id="videos" class="video-grid"></div>
+        <div id="error" class="error-message"></div>
+    </div>
+
+    <div id="player" class="player">
+        <button id="closePlayer">&times;</button>
+        <iframe id="playerIframe" src="" frameborder="0" allowfullscreen></iframe>
+        <button class="like-button" id="likeButton"><i class="fas fa-thumbs-up"></i> Like (<span id="likeCount">0</span>)</button>
+        <button class="subscribe-button" id="subscribeButton"><i class="fas fa-user-plus"></i> Follow (<span id="subscriberCount">0</span>)</button>
+    </div>
+
+    <script>
+        const API_KEY = 'AIzaSyBxzUIKZNKvSFp_fVQCKDMbc8rLGYMqEbI';
+        const TRENDING_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=US&key=' + API_KEY;
+        const SEARCH_API_URL = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=' + API_KEY;
+
+        let nextPageToken = '';
+        let isLoading = false;
+        let currentVideoId = null;
+        let likeCounts = {};
+        let subscriberCounts = {};
+
+        async function fetchTrendingVideos(pageToken = '') {
+            if (isLoading) return;
+            isLoading = true;
+            try {
+                const response = await fetch(`${TRENDING_API_URL}&pageToken=${pageToken}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                displayVideos(data.items);
+                nextPageToken = data.nextPageToken || '';
+                isLoading = false;
+            } catch (error) {
+                console.error('Error fetching videos:', error);
+                document.getElementById('error').innerText = `Error fetching videos: ${error.message}`;
+                isLoading = false;
+            }
+        }
+
+        async function searchVideos(query, pageToken = '') {
+            if (isLoading) return;
+            isLoading = true;
+            try {
+                const response = await fetch(`${SEARCH_API_URL}&q=${encodeURIComponent(query)}&pageToken=${pageToken}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (pageToken === '') {
+                    document.getElementById('videos').innerHTML = ''; // Clear previous videos
+                }
+                displayVideos(data.items.map(item => ({ id: item.id.videoId, snippet: item.snippet })));
+                nextPageToken = data.nextPageToken || '';
+                isLoading = false;
+            } catch (error) {
+                console.error('Error fetching search results:', error);
+                document.getElementById('error').innerText = `Error fetching search results: ${error.message}`;
+                isLoading = false;
+            }
+        }
+
+        function displayVideos(videos) {
+            const videosContainer = document.getElementById('videos');
+            videos.forEach(video => {
+                const videoElement = document.createElement('div');
+                videoElement.classList.add('video');
+                
+                videoElement.dataset.videoId = video.id;
+                videoElement.innerHTML = `
+                    <img src="${video.snippet.thumbnails.medium.url}" alt="${video.snippet.title}">
+                    <div class="video-title">${video.snippet.title}</div>
+                `;
+                
+                videosContainer.appendChild(videoElement);
+            });
+        }
+
+        function handleScroll() {
+            const scrollPosition = window.innerHeight + window.scrollY;
+            const threshold = document.documentElement.offsetHeight - 500;
+            if (scrollPosition > threshold && nextPageToken) {
+                if (document.getElementById('searchQuery').value.trim()) {
+                    searchVideos(document.getElementById('searchQuery').value.trim(), nextPageToken);
+                } else {
+                    fetchTrendingVideos(nextPageToken);
+                }
+            }
+        }
+
+        function openPlayer(videoId) {
+            const player = document.getElementById('player');
+            const playerIframe = document.getElementById('playerIframe');
+            currentVideoId = videoId;
+            // Use youtube-nocookie.com for embedding the video
+            playerIframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
+            player.style.display = 'flex';
+            updateCounts(videoId);
+        }
+
+        function closePlayer() {
+            const player = document.getElementById('player');
+            const playerIframe = document.getElementById('playerIframe');
+            playerIframe.src = '';
+            player.style.display = 'none';
+        }
+
+        async function updateCounts(videoId) {
+            // Load from local file
+            await loadCounts();
+            document.getElementById('likeCount').innerText = likeCounts[videoId] || 0;
+            document.getElementById('subscriberCount').innerText = subscriberCounts[videoId] || 0;
+        }
+
+        async function loadCounts() {
+            // Simulate loading from a file (replace with actual file reading code)
+            const counts = `
+                dQw4w9WgXcQ likes: 1024 subscribers: 500
+                M7lc1UVf-VE likes: 213 subscribers: 320
+            `; // Simulated content from live_counts.txt
+            const lines = counts.trim().split('\n');
+            lines.forEach(line => {
+                const [videoId, likes, subscribers] = line.split(' ');
+                likeCounts[videoId] = parseInt(likes.split(':')[1], 10);
+                subscriberCounts[videoId] = parseInt(subscribers.split(':')[1], 10);
+            });
+        }
+
+        function updateLikeCount() {
+            if (currentVideoId) {
+                likeCounts[currentVideoId] = (likeCounts[currentVideoId] || 0) + 1;
+                document.getElementById('likeCount').innerText = likeCounts[currentVideoId];
+                saveCounts();
+            }
+        }
+
+        function updateSubscriberCount() {
+            if (currentVideoId) {
+                subscriberCounts[currentVideoId] = (subscriberCounts[currentVideoId] || 0) + 1;
+                document.getElementById('subscriberCount').innerText = subscriberCounts[currentVideoId];
+                saveCounts();
+            }
+        }
+
+        async function saveCounts() {
+            // Simulate saving to a file (replace with actual file writing code)
+            let content = '';
+            for (const videoId in likeCounts) {
+                content += `${videoId} likes: ${likeCounts[videoId]} subscribers: ${subscriberCounts[videoId] || 0}\n`;
+            }
+            console.log('Saving to file:', content); // Replace with actual file saving
+        }
+
+        document.getElementById('closePlayer').addEventListener('click', closePlayer);
+
+        document.getElementById('videos').addEventListener('click', event => {
+            const videoElement = event.target.closest('.video');
+            if (videoElement) {
+                const videoId = videoElement.dataset.videoId;
+                openPlayer(videoId);
+            }
+        });
+
+        document.getElementById('searchButton').addEventListener('click', () => {
+            const query = document.getElementById('searchQuery').value;
+            if (query.trim() !== '') {
+                searchVideos(query);
+            }
+        });
+
+        document.getElementById('searchQuery').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const query = document.getElementById('searchQuery').value;
+                if (query.trim() !== '') {
+                    searchVideos(query);
+                }
+            }
+        });
+
+        document.getElementById('likeButton').addEventListener('click', updateLikeCount);
+        document.getElementById('subscribeButton').addEventListener('click', updateSubscriberCount);
+
+        document.getElementById('homeButton').addEventListener('click', () => {
+            document.getElementById('pageTitle').innerText = 'Trending Videos';
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('videos').innerHTML = '';
+            nextPageToken = '';
+            fetchTrendingVideos();
+        });
+
+        // Fetch initial set of videos
+        fetchTrendingVideos();
+
+        // Add scroll event listener
+        window.addEventListener('scroll', handleScroll);
+    </script>
+</body>
+</html>
