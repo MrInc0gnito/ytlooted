@@ -53,7 +53,7 @@
         }
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 15px;
             margin-top: 20px;
         }
@@ -70,7 +70,7 @@
         }
         .video img {
             width: 100%;
-            height: 112px; /* Fixed height for thumbnails */
+            height: 84px;
             object-fit: cover;
         }
         .video-title {
@@ -163,12 +163,12 @@
         const API_KEY = 'AIzaSyBxzUIKZNKvSFp_fVQCKDMbc8rLGYMqEbI';
         const TRENDING_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=US&key=' + API_KEY;
         const SEARCH_API_URL = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=' + API_KEY;
+        const VIDEO_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=statistics&id='; 
+        const CHANNEL_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/channels?part=statistics&id=';
 
         let nextPageToken = '';
         let isLoading = false;
         let currentVideoId = null;
-        let likeCounts = {};
-        let subscriberCounts = {};
 
         async function fetchTrendingVideos(pageToken = '') {
             if (isLoading) return;
@@ -198,15 +198,12 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                if (pageToken === '') {
-                    document.getElementById('videos').innerHTML = ''; // Clear previous videos
-                }
-                displayVideos(data.items.map(item => ({ id: item.id.videoId, snippet: item.snippet })));
+                displayVideos(data.items);
                 nextPageToken = data.nextPageToken || '';
                 isLoading = false;
             } catch (error) {
-                console.error('Error fetching search results:', error);
-                document.getElementById('error').innerText = `Error fetching search results: ${error.message}`;
+                console.error('Error searching videos:', error);
+                document.getElementById('error').innerText = `Error searching videos: ${error.message}`;
                 isLoading = false;
             }
         }
@@ -216,13 +213,11 @@
             videos.forEach(video => {
                 const videoElement = document.createElement('div');
                 videoElement.classList.add('video');
-                
-                videoElement.dataset.videoId = video.id;
+                videoElement.dataset.videoId = video.id.videoId || video.id;
                 videoElement.innerHTML = `
                     <img src="${video.snippet.thumbnails.medium.url}" alt="${video.snippet.title}">
                     <div class="video-title">${video.snippet.title}</div>
                 `;
-                
                 videosContainer.appendChild(videoElement);
             });
         }
@@ -243,7 +238,6 @@
             const player = document.getElementById('player');
             const playerIframe = document.getElementById('playerIframe');
             currentVideoId = videoId;
-            // Use youtube-nocookie.com for embedding the video
             playerIframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
             player.style.display = 'flex';
             updateCounts(videoId);
@@ -257,49 +251,43 @@
         }
 
         async function updateCounts(videoId) {
-            // Load from local file
-            await loadCounts();
-            document.getElementById('likeCount').innerText = likeCounts[videoId] || 0;
-            document.getElementById('subscriberCount').innerText = subscriberCounts[videoId] || 0;
+            try {
+                const videoResponse = await fetch(`${VIDEO_STATS_API_URL}${videoId}&key=${API_KEY}`);
+                if (!videoResponse.ok) {
+                    throw new Error(`HTTP error! status: ${videoResponse.status}`);
+                }
+                const videoData = await videoResponse.json();
+                const likeCount = videoData.items[0].statistics.likeCount || 0;
+                
+                const channelId = videoData.items[0].snippet.channelId;
+                const channelResponse = await fetch(`${CHANNEL_STATS_API_URL}${channelId}&key=${API_KEY}`);
+                if (!channelResponse.ok) {
+                    throw new Error(`HTTP error! status: ${channelResponse.status}`);
+                }
+                const channelData = await channelResponse.json();
+                const subscriberCount = channelData.items[0].statistics.subscriberCount || 0;
+
+                document.getElementById('likeCount').innerText = likeCount;
+                document.getElementById('subscriberCount').innerText = subscriberCount;
+            } catch (error) {
+                console.error('Error updating counts:', error);
+            }
         }
 
-        async function loadCounts() {
-            // Simulate loading from a file (replace with actual file reading code)
-            const counts = `
-                dQw4w9WgXcQ likes: 1024 subscribers: 500
-                M7lc1UVf-VE likes: 213 subscribers: 320
-            `; // Simulated content from live_counts.txt
-            const lines = counts.trim().split('\n');
-            lines.forEach(line => {
-                const [videoId, likes, subscribers] = line.split(' ');
-                likeCounts[videoId] = parseInt(likes.split(':')[1], 10);
-                subscriberCounts[videoId] = parseInt(subscribers.split(':')[1], 10);
-            });
-        }
-
-        function updateLikeCount() {
+        async function updateLikeCount() {
             if (currentVideoId) {
-                likeCounts[currentVideoId] = (likeCounts[currentVideoId] || 0) + 1;
-                document.getElementById('likeCount').innerText = likeCounts[currentVideoId];
-                saveCounts();
+                const likeCount = parseInt(document.getElementById('likeCount').innerText, 10) + 1;
+                document.getElementById('likeCount').innerText = likeCount;
+                // Optionally, send this updated count to your backend or store it locally
             }
         }
 
-        function updateSubscriberCount() {
+        async function updateSubscriberCount() {
             if (currentVideoId) {
-                subscriberCounts[currentVideoId] = (subscriberCounts[currentVideoId] || 0) + 1;
-                document.getElementById('subscriberCount').innerText = subscriberCounts[currentVideoId];
-                saveCounts();
+                const subscriberCount = parseInt(document.getElementById('subscriberCount').innerText, 10) + 1;
+                document.getElementById('subscriberCount').innerText = subscriberCount;
+                // Optionally, send this updated count to your backend or store it locally
             }
-        }
-
-        async function saveCounts() {
-            // Simulate saving to a file (replace with actual file writing code)
-            let content = '';
-            for (const videoId in likeCounts) {
-                content += `${videoId} likes: ${likeCounts[videoId]} subscribers: ${subscriberCounts[videoId] || 0}\n`;
-            }
-            console.log('Saving to file:', content); // Replace with actual file saving
         }
 
         document.getElementById('closePlayer').addEventListener('click', closePlayer);
