@@ -14,9 +14,11 @@
             color: #fff;
         }
         .container {
-            width: 90%;
-            margin: 0 auto;
+            width: 100%;
+            height: 100vh;
+            margin: 0;
             padding: 20px;
+            box-sizing: border-box;
         }
         header {
             display: flex;
@@ -59,9 +61,11 @@
         }
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
             margin-top: 20px;
+            height: calc(100vh - 80px); /* Adjust based on header height */
+            overflow-y: auto;
         }
         .video {
             border-radius: 8px;
@@ -76,12 +80,12 @@
         }
         .video img {
             width: 100%;
-            height: 84px;
+            height: 200px; /* Larger thumbnail size */
             object-fit: cover;
         }
         .video-title {
             padding: 10px;
-            font-size: 14px;
+            font-size: 16px; /* Adjust font size */
             font-weight: bold;
             color: #fff;
             margin: 0;
@@ -140,42 +144,11 @@
         .action-button:hover {
             transform: scale(1.1);
         }
-        .subscribe-button {
-            background-color: #ff0000;
-        }
-        .subscribe-button i {
-            color: #fff;
-        }
         .close-button {
             background-color: #d40000;
         }
         .close-button i {
             color: #fff;
-        }
-        .subscribe-count {
-            color: #fff;
-            font-size: 12px;
-            margin-top: 5px;
-            text-align: center;
-        }
-        .player button {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #ff0000;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            font-size: 24px;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .player button:hover {
-            background: #d40000;
         }
     </style>
 </head>
@@ -200,25 +173,16 @@
             <i class="fa-regular fa-x"></i>
         </button>
         <iframe id="playerIframe" src="" frameborder="0" allowfullscreen></iframe>
-        <div class="actions">
-            <button class="action-button subscribe-button" id="subscribeButton">
-                <i class="fa-solid fa-user-plus"></i>
-            </button>
-            <div class="subscribe-count" id="subscriberCount">0</div>
-        </div>
     </div>
 
     <script>
         const API_KEY = 'AIzaSyBxzUIKZNKvSFp_fVQCKDMbc8rLGYMqEbI';
         const TRENDING_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=US&key=' + API_KEY;
         const SEARCH_API_URL = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=' + API_KEY;
-        const VIDEO_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/videos?part=statistics&id=';
-        const CHANNEL_STATS_API_URL = 'https://www.googleapis.com/youtube/v3/channels?part=statistics&id=';
 
         let nextPageToken = '';
         let isLoading = false;
         let currentVideoId = null;
-        let subscribedChannels = new Set();
 
         async function fetchTrendingVideos(pageToken = '') {
             if (isLoading) return;
@@ -290,7 +254,6 @@
             currentVideoId = videoId;
             playerIframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
             player.style.display = 'flex';
-            updateCounts(videoId);
         }
 
         function closePlayer() {
@@ -298,64 +261,6 @@
             const playerIframe = document.getElementById('playerIframe');
             playerIframe.src = '';
             player.style.display = 'none';
-        }
-
-        async function updateCounts(videoId) {
-            try {
-                const videoResponse = await fetch(`${VIDEO_STATS_API_URL}${videoId}&key=${API_KEY}`);
-                if (!videoResponse.ok) {
-                    throw new Error(`HTTP error! status: ${videoResponse.status}`);
-                }
-                const videoData = await videoResponse.json();
-                const likeCount = videoData.items[0].statistics.likeCount || 0;
-
-                const channelId = videoData.items[0].snippet.channelId;
-                const channelResponse = await fetch(`${CHANNEL_STATS_API_URL}${channelId}&key=${API_KEY}`);
-                if (!channelResponse.ok) {
-                    throw new Error(`HTTP error! status: ${channelResponse.status}`);
-                }
-                const channelData = await channelResponse.json();
-                const subscriberCount = channelData.items[0].statistics.subscriberCount || 0;
-
-                document.getElementById('subscriberCount').innerText = formatNumber(subscriberCount);
-
-                const subscribeButton = document.getElementById('subscribeButton');
-                subscribeButton.classList.toggle('subscribed', subscribedChannels.has(channelId));
-            } catch (error) {
-                console.error('Error updating counts:', error);
-            }
-        }
-
-        function formatNumber(number) {
-            if (number >= 1000000) {
-                return (number / 1000000).toFixed(1) + 'm';
-            } else if (number >= 1000) {
-                return (number / 1000).toFixed(1) + 'k';
-            } else {
-                return number;
-            }
-        }
-
-        function handleSubscribeButton() {
-            if (currentVideoId) {
-                const subscribeCountElement = document.getElementById('subscriberCount');
-                const subscribeButton = document.getElementById('subscribeButton');
-                const channelId = currentVideoId;
-
-                const subscribed = subscribeButton.classList.contains('subscribed');
-                let subscriberCount = parseInt(subscribeCountElement.innerText.replace(/[^0-9]/g, ''), 10);
-
-                subscribeCountElement.innerText = formatNumber(subscribed ? subscriberCount - 1 : subscriberCount + 1);
-                subscribeButton.classList.toggle('subscribed', !subscribed);
-
-                if (subscribed) {
-                    subscribedChannels.delete(channelId);
-                } else {
-                    subscribedChannels.add(channelId);
-                }
-                subscribeButton.classList.add('animate');
-                setTimeout(() => subscribeButton.classList.remove('animate'), 300);
-            }
         }
 
         document.getElementById('closePlayer').addEventListener('click', closePlayer);
@@ -383,8 +288,6 @@
                 }
             }
         });
-
-        document.getElementById('subscribeButton').addEventListener('click', handleSubscribeButton);
 
         document.getElementById('homeButton').addEventListener('click', () => {
             document.getElementById('pageTitle').innerText = 'Trending Videos';
