@@ -12,11 +12,11 @@
             padding: 0;
             background-color: #181818;
             color: #fff;
+            overflow-x: hidden;
         }
         .container {
             width: 100%;
-            height: 100vh;
-            margin: 0;
+            margin: 0 auto;
             padding: 20px;
             box-sizing: border-box;
         }
@@ -61,11 +61,9 @@
         }
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
             margin-top: 20px;
-            height: calc(100vh - 80px); /* Adjust based on header height */
-            overflow-y: auto;
         }
         .video {
             border-radius: 8px;
@@ -80,20 +78,22 @@
         }
         .video img {
             width: 100%;
-            height: 200px; /* Larger thumbnail size */
+            height: 120px;
             object-fit: cover;
         }
         .video-title {
             padding: 10px;
-            font-size: 16px; /* Adjust font size */
+            font-size: 14px;
             font-weight: bold;
             color: #fff;
             margin: 0;
+            text-align: center;
         }
         .error-message {
             color: #ff0000;
             font-weight: bold;
             margin-top: 20px;
+            text-align: center;
         }
         .player {
             display: none;
@@ -109,46 +109,33 @@
             overflow: hidden;
         }
         .player iframe {
-            width: 80%;
-            height: 80%;
+            width: 90%;
+            height: 70%;
             border: none;
             border-radius: 8px;
         }
-        .player .actions {
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-        .action-button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #ff0000;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            font-size: 24px;
-            color: #fff;
-            transition: transform 0.3s ease;
-        }
-        .action-button i {
-            color: #fff;
-        }
-        .action-button:hover {
-            transform: scale(1.1);
-        }
         .close-button {
-            background-color: #d40000;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: transparent;
+            border: none;
+            font-size: 30px;
+            color: #fff;
+            cursor: pointer;
         }
         .close-button i {
-            color: #fff;
+            color: #ff0000;
+        }
+
+        @media (max-width: 768px) {
+            .video img {
+                height: 100px;
+            }
+            .player iframe {
+                width: 95%;
+                height: 60%;
+            }
         }
     </style>
 </head>
@@ -169,7 +156,7 @@
     </div>
 
     <div id="player" class="player">
-        <button id="closePlayer" class="action-button close-button">
+        <button id="closePlayer" class="close-button">
             <i class="fa-regular fa-x"></i>
         </button>
         <iframe id="playerIframe" src="" frameborder="0" allowfullscreen></iframe>
@@ -184,11 +171,12 @@
         let isLoading = false;
         let currentVideoId = null;
 
+        // Load enough videos to fill the page initially
         async function fetchTrendingVideos(pageToken = '') {
             if (isLoading) return;
             isLoading = true;
             try {
-                const response = await fetch(`${TRENDING_API_URL}&pageToken=${pageToken}`);
+                const response = await fetch(`${TRENDING_API_URL}&pageToken=${pageToken}&maxResults=20`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -207,7 +195,7 @@
             if (isLoading) return;
             isLoading = true;
             try {
-                const response = await fetch(`${SEARCH_API_URL}&q=${encodeURIComponent(query)}&pageToken=${pageToken}`);
+                const response = await fetch(`${SEARCH_API_URL}&q=${encodeURIComponent(query)}&pageToken=${pageToken}&maxResults=20`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -251,9 +239,9 @@
         function openPlayer(videoId) {
             const player = document.getElementById('player');
             const playerIframe = document.getElementById('playerIframe');
-            currentVideoId = videoId;
-            playerIframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
+            playerIframe.src = `https://www.youtube-nocookie.com/embed/${videoId}`;
             player.style.display = 'flex';
+            currentVideoId = videoId;
         }
 
         function closePlayer() {
@@ -261,21 +249,24 @@
             const playerIframe = document.getElementById('playerIframe');
             playerIframe.src = '';
             player.style.display = 'none';
+            currentVideoId = null;
         }
 
-        document.getElementById('closePlayer').addEventListener('click', closePlayer);
-
-        document.getElementById('videos').addEventListener('click', event => {
-            const videoElement = event.target.closest('.video');
+        document.getElementById('videos').addEventListener('click', (e) => {
+            const videoElement = e.target.closest('.video');
             if (videoElement) {
                 const videoId = videoElement.dataset.videoId;
                 openPlayer(videoId);
             }
         });
 
+        document.getElementById('closePlayer').addEventListener('click', closePlayer);
+
         document.getElementById('searchButton').addEventListener('click', () => {
             const query = document.getElementById('searchQuery').value;
             if (query.trim() !== '') {
+                document.getElementById('videos').innerHTML = '';
+                nextPageToken = '';
                 searchVideos(query);
             }
         });
@@ -284,6 +275,8 @@
             if (e.key === 'Enter') {
                 const query = document.getElementById('searchQuery').value;
                 if (query.trim() !== '') {
+                    document.getElementById('videos').innerHTML = '';
+                    nextPageToken = '';
                     searchVideos(query);
                 }
             }
